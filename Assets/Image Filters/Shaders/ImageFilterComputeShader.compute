@@ -1,0 +1,64 @@
+#pragma kernel FilterComputer
+
+struct ColorData 
+{
+	float r, g, b;
+
+	void setColor(float3 col) 
+	{
+		r = col.x;
+		g = col.y;
+		b = col.z;
+	}
+
+	float3 getColor() 
+	{
+		return float3(r, g, b);
+	}
+};
+
+uint width;
+uint height;
+uint sample_size;
+RWStructuredBuffer<ColorData> colorDataBuffer;
+
+uint index1D(uint x, uint y) 
+{
+	return y * width + x;
+}
+
+bool inRange(uint x, uint y) 
+{
+	return x >= 0 && x < width && y >= 0 && y < height;
+}
+
+ColorData getDataFromBuffer(int x, int y) 
+{
+	return colorDataBuffer[index1D(x, y)];
+}
+
+[numthreads(16,16,1)]
+void FilterComputer (uint3 id : SV_DispatchThreadID)
+{
+	uint index = index1D(id.x, id.y);
+	ColorData temp = colorDataBuffer[index];
+
+	float3 avgColor = temp.getColor();
+	uint sampleCount = 1;
+
+	for (uint x = 0; x < sample_size * 2; x++) 
+		for (uint y = 0; y < sample_size * 2; y++)
+		{
+			uint sampleX = (x - sample_size) + id.x;
+			uint sampleY = (y - sample_size) + id.y;
+			if ((sampleX == id.x && sampleY == id.y) || !inRange(sampleX, sampleY)) continue;
+			
+			avgColor += getDataFromBuffer(sampleX, sampleY).getColor();
+			sampleCount++;
+		}
+
+	avgColor /= sampleCount;
+	temp.setColor(avgColor);
+		
+	colorDataBuffer[index] = temp;
+}
