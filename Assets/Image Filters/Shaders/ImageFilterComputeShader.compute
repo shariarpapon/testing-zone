@@ -1,4 +1,5 @@
-#pragma kernel FilterComputer
+#pragma kernel Blur
+#pragma kernel Filter2
 
 struct ColorData 
 {
@@ -37,8 +38,8 @@ ColorData getDataFromBuffer(int x, int y)
 	return colorDataBuffer[index1D(x, y)];
 }
 
-[numthreads(16,16,1)]
-void FilterComputer (uint3 id : SV_DispatchThreadID)
+[numthreads(32,32,1)]
+void Blur (uint3 id : SV_DispatchThreadID)
 {
 	uint index = index1D(id.x, id.y);
 	ColorData temp = colorDataBuffer[index];
@@ -60,5 +61,39 @@ void FilterComputer (uint3 id : SV_DispatchThreadID)
 	avgColor /= sampleCount;
 	temp.setColor(avgColor);
 		
+	colorDataBuffer[index] = temp;
+}
+
+[numthreads(32, 32, 1)]
+void Filter2(uint3 id : SV_DispatchThreadID)
+{
+	uint index = index1D(id.x, id.y);
+	ColorData temp = colorDataBuffer[index];
+
+	float3 avgColor = temp.getColor();
+	uint sampleCount = 1;
+
+	for (uint x = 0; x < sample_size * 2; x++)
+		for (uint y = 0; y < sample_size * 2; y++)
+		{
+			uint sampleX = (x - sample_size) + id.x;
+			uint sampleY = (y - sample_size) + id.y;
+			if ((sampleX == id.x && sampleY == id.y) || !inRange(sampleX, sampleY)) continue;
+			sampleCount++;
+		}
+
+	avgColor *= sampleCount;
+
+	for (uint x = 0; x < sample_size * 2; x++)
+		for (uint y = 0; y < sample_size * 2; y++)
+		{
+			uint sampleX = (x - sample_size) + id.x;
+			uint sampleY = (y - sample_size) + id.y;
+			if ((sampleX == id.x && sampleY == id.y) || !inRange(sampleX, sampleY)) continue;
+			ColorData sampleData = getDataFromBuffer(sampleX, sampleY);
+			avgColor -= sampleData.getColor();
+		}
+	
+	temp.setColor(saturate(avgColor));
 	colorDataBuffer[index] = temp;
 }
